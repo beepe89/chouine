@@ -8,7 +8,8 @@ type AnnounceType = "none" | "mariage" | "tierce" | "quarteron" | "quinte" | "ch
 
 export default function Home() {
   const [data, setData] = useState<any>(null);
-
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+  
   const [gameId, setGameId] = useState<string | null>(null);
   const [leader, setLeader] = useState<"player" | "opponent">("player");
   const [hand, setHand] = useState<Card[]>([]);
@@ -44,7 +45,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/game/new", { method: "POST" });
+      const res = await fetch(`${API_BASE}/game/new`, { method: "POST" });
       const json = await res.json();
       if (json?.error) {
         setError(String(json.error));
@@ -86,7 +87,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/game/${gameId}/exchange7`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/game/${gameId}/exchange7`, { method: "POST" });
       const json = await res.json();
       if (json?.error) setError(String(json.error));
       sync(json);
@@ -117,7 +118,7 @@ export default function Home() {
         body.au_sept = auSeptRequired ? auSept : false;
       }
 
-      const res = await fetch(`http://127.0.0.1:8000/game/${gameId}/${endpoint}`, {
+      const res = await fetch(`${API_BASE}/game/${gameId}/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
