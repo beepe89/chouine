@@ -1,0 +1,113 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { RANK_LABELS, SUIT_LABELS } from "@/lib/cards";
+
+
+export default function Home() {
+  const [data, setData] = useState<any>(null);
+  const [playedCard, setPlayedCard] = useState<any>(null);
+  const [hand, setHand] = useState<any[]>([]);
+  const [gameId, setGameId] = useState<string | null>(null);
+  const [leader, setLeader] = useState<string>("player");
+  const [lastTrick, setLastTrick] = useState<any>(null);
+
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/game/new", { method: "POST" })
+      .then((r) => r.json())
+      .then((json) => {
+        setData(json);
+        setGameId(json.game_id);
+        setLeader(json.leader);
+        setHand(json.hands.player); // <- main locale
+        setLastTrick(json.last_trick);
+        setPlayedCard(null);
+      	})
+      .catch((e) => setData({ error: String(e) }));
+  }, []);
+
+return (
+  <main className="p-6">
+    <h1 className="text-2xl font-semibold">Chouine MVP</h1>
+
+    {data && data.hands && (
+      <>
+        <h2 className="mt-6 font-semibold">Ta main</h2>
+
+        <div className="mt-2 flex gap-2">
+	{hand.map((c: any, i: number) => (
+  		<div
+    		key={`${c.suit}-${c.rank}-${i}`}
+onClick={async () => {
+  if (!gameId) return;
+
+  const res = await fetch(`http://127.0.0.1:8000/game/${gameId}/play`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ card: c }),
+  });
+
+  const json = await res.json();
+  setData(json);
+  setLeader(json.leader);
+  setHand(json.hands.player);
+  setLastTrick(json.last_trick);
+  setPlayedCard(null);
+}}
+    		className="w-24 h-32 border rounded bg-white flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50" >
+    		<div className="text-sm font-semibold">{RANK_LABELS[c.rank]}</div>
+    		<div className="text-xs text-gray-600">{SUIT_LABELS[c.suit]}</div>
+  		</div>
+		))}
+{playedCard && (
+  <>
+    <h2 className="mt-6 font-semibold">Carte jouée</h2>
+    <div className="mt-2 w-24 h-32 border rounded bg-gray-100 flex flex-col items-center justify-center">
+      <div className="text-sm font-semibold">
+        {RANK_LABELS[playedCard.rank]}
+      </div>
+      <div className="text-xs text-gray-600">
+        {SUIT_LABELS[playedCard.suit]}
+      </div>
+    </div>
+  </>
+)}
+        </div>
+
+        <h2 className="mt-6 font-semibold">Atout</h2>
+        <div className="mt-2 text-sm">
+          {RANK_LABELS[data.trump.rank]} de {SUIT_LABELS[data.trump.suit]}
+        </div>
+
+{lastTrick && (
+  <>
+    <h2 className="mt-6 font-semibold">Dernier pli</h2>
+    <p className="text-sm mt-2">
+      Entame : {RANK_LABELS[lastTrick.lead.card.rank]} de {SUIT_LABELS[lastTrick.lead.card.suit]} ({lastTrick.lead.by})
+      <br />
+      Réponse : {RANK_LABELS[lastTrick.reply.card.rank]} de {SUIT_LABELS[lastTrick.reply.card.suit]} ({lastTrick.reply.by})
+      <br />
+      Gagnant : <strong>{lastTrick.winner}</strong>
+    </p>
+  </>
+)}
+
+
+        <p className="mt-4 text-sm text-gray-600">
+          Talon restant : {data.talon_count} cartes
+        </p>
+      </>
+    )}
+
+<button
+  className="mt-4 px-4 py-2 rounded border hover:bg-gray-50"
+  onClick={() => window.location.reload()}
+>
+  Nouvelle donne
+</button>
+  </main>
+);
+
+}
+
