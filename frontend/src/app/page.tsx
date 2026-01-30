@@ -140,27 +140,30 @@ export default function Home() {
     }
   }
 
-  return (
-    <main className="p-6">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold">La chouine</h1>
+return (
+  <main className="p-6">
+    {/* Header */}
+    <div className="flex items-center gap-3">
+      <h1 className="text-2xl font-semibold">La chouine</h1>
 
-        <button
-          className="ml-auto px-4 py-2 rounded border hover:bg-gray-50 disabled:opacity-50"
-          onClick={loadNewGame}
-          disabled={loading}
-        >
-          Nouvelle donne
-        </button>
+      <button
+        className="ml-auto px-4 py-2 rounded border hover:bg-gray-50 disabled:opacity-50"
+        onClick={loadNewGame}
+        disabled={loading}
+      >
+        Nouvelle donne
+      </button>
+    </div>
+
+    {error && (
+      <div className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        {error}
       </div>
+    )}
 
-      {error && (
-        <div className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="mt-4 text-sm text-gray-700 space-y-1">
+    {/* Top info row: left meta / right big trump (yellow) */}
+    <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="text-sm text-gray-700 space-y-1">
         <div>
           <span className="font-semibold">Leader :</span> {leader === "player" ? "toi" : "adversaire"}
         </div>
@@ -171,35 +174,8 @@ export default function Home() {
           </div>
         )}
 
-        {trump && (
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">Atout :</span>
-            <span>
-              {RANK_LABELS[trump.rank]} de {SUIT_LABELS[trump.suit]}
-            </span>
-            <span className="inline-block w-[42px] h-[60px] rounded overflow-hidden align-middle">
-              <img
-                src={cardImageSrc(trump)}
-                alt={`Atout: ${RANK_LABELS[trump.rank]} de ${SUIT_LABELS[trump.suit]}`}
-                className="w-full h-full object-contain"
-              />
-            </span>
-
-            {canExchange7 && (
-              <button
-                onClick={exchange7}
-                disabled={loading}
-                className="ml-3 px-3 py-1 rounded border hover:bg-gray-50 disabled:opacity-50"
-                title="Échanger le 7 d’atout contre la retourne"
-              >
-                Échange 7 d’atout
-              </button>
-            )}
-          </div>
-        )}
-
         {auSeptRequired && !isOver && (
-          <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <div className="font-semibold">“Au sept” requis (talon = 2 et échange non fait)</div>
             <label className="mt-2 flex items-center gap-2">
               <input type="checkbox" checked={auSept} onChange={(e) => setAuSept(e.target.checked)} />
@@ -209,186 +185,266 @@ export default function Home() {
         )}
       </div>
 
-      {/* Score panel (always visible) */}
-      {scoreSoFar && (
-        <div className="mt-6 rounded border p-3 text-sm">
-          <div className="font-semibold">Score (en cours — dix de der à la fin)</div>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {trump && (
+        <div className="flex items-center gap-4 sm:justify-end">
+          <div className="text-sm text-gray-700 text-right">
+            <div className="font-semibold">Atout</div>
             <div>
-              <div className="font-semibold">Toi</div>
-              <div>Cartes : {scoreSoFar.player.cards}</div>
-              <div>Annonces : {scoreSoFar.player.announces}</div>
-              <div>Total : {scoreSoFar.player.total}</div>
+              {RANK_LABELS[trump.rank]} de {SUIT_LABELS[trump.suit]}
             </div>
-            <div>
-              <div className="font-semibold">Adversaire</div>
-              <div>Cartes : {scoreSoFar.opponent.cards}</div>
-              <div>Annonces : {scoreSoFar.opponent.announces}</div>
-              <div>Total : {scoreSoFar.opponent.total}</div>
-            </div>
+
+            {canExchange7 && (
+              <button
+                onClick={exchange7}
+                disabled={loading}
+                className="mt-2 px-3 py-1 rounded border hover:bg-gray-50 disabled:opacity-50"
+                title="Échanger le 7 d’atout contre la retourne"
+              >
+                Échange 7 d’atout
+              </button>
+            )}
           </div>
 
-          {lastAnnounce && (
-            <div className="mt-3 text-xs text-gray-600">
-              Dernière annonce : {lastAnnounce.by} → {lastAnnounce.type}
-              {lastAnnounce.suit ? `(${lastAnnounce.suit})` : ""}
-            </div>
-          )}
+          {/* bigger trump card */}
+          <div className="w-[84px] h-[120px] sm:w-[96px] sm:h-[138px] rounded overflow-hidden border bg-white">
+            <img
+              src={cardImageSrc(trump)}
+              alt={`Atout: ${RANK_LABELS[trump.rank]} de ${SUIT_LABELS[trump.suit]}`}
+              className="w-full h-full object-contain"
+            />
+          </div>
         </div>
       )}
+    </div>
 
-      {isOver && (
-        <div className="mt-6 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-          🏁 Partie terminée —{" "}
-          <strong>{winner === "player" ? "tu gagnes" : winner === "opponent" ? "tu perds" : "égalité"}</strong>
-          {finalScore && (
-            <div className="mt-2 text-sm text-green-900">
+    {/* Main layout: left column (score + announce + hand), right column (current trick + last trick) */}
+    <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-6 items-start">
+      {/* LEFT */}
+      <div>
+        {/* Score panel (blue: narrower + opponent left) */}
+        {scoreSoFar && (
+          <div className="rounded border p-3 text-sm max-w-3xl">
+            <div className="font-semibold">Score (en cours — dix de der à la fin)</div>
+
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Opponent first (left) */}
               <div>
-                Toi : {finalScore.player.total} (cartes {finalScore.player.cards} + annonces{" "}
-                {finalScore.player.announces} + dix de der {finalScore.player.dix_de_der})
+                <div className="font-semibold">Adversaire</div>
+                <div>Cartes : {scoreSoFar.opponent.cards}</div>
+                <div>Annonces : {scoreSoFar.opponent.announces}</div>
+                <div>Total : {scoreSoFar.opponent.total}</div>
               </div>
+
+              {/* Player second (right) */}
               <div>
-                Adversaire : {finalScore.opponent.total} (cartes {finalScore.opponent.cards} + annonces{" "}
-                {finalScore.opponent.announces} + dix de der {finalScore.opponent.dix_de_der})
+                <div className="font-semibold">Toi</div>
+                <div>Cartes : {scoreSoFar.player.cards}</div>
+                <div>Annonces : {scoreSoFar.player.announces}</div>
+                <div>Total : {scoreSoFar.player.total}</div>
               </div>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Announcement panel: available whenever YOU are about to play */}
-      {!isOver && (
-        <div className="mt-8 rounded border p-3 text-sm">
-          <div className="font-semibold">Annoncer (au moment où tu poses ta carte)</div>
+            {lastAnnounce && (
+              <div className="mt-3 text-xs text-gray-600">
+                Dernière annonce : {lastAnnounce.by} → {lastAnnounce.type}
+                {lastAnnounce.suit ? `(${lastAnnounce.suit})` : ""}
+              </div>
+            )}
+          </div>
+        )}
 
-          <div className="mt-2 flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-gray-600">Type</span>
-              <select
-                value={announceType}
-                onChange={(e) => setAnnounceType(e.target.value as AnnounceType)}
-                className="border rounded px-2 py-1"
-                disabled={!canPlay}
-              >
-                <option value="none">Aucune</option>
-                <option value="mariage">Mariage</option>
-                <option value="tierce">Tierce</option>
-                <option value="quarteron">Quarteron</option>
-                <option value="quinte">Quinte (5 brisques)</option>
-                <option value="chouine">Chouine</option>
-              </select>
-            </label>
+        {isOver && (
+          <div className="mt-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800 max-w-3xl">
+            🏁 Partie terminée —{" "}
+            <strong>{winner === "player" ? "tu gagnes" : winner === "opponent" ? "tu perds" : "égalité"}</strong>
+            {finalScore && (
+              <div className="mt-2 text-sm text-green-900">
+                <div>
+                  Toi : {finalScore.player.total} (cartes {finalScore.player.cards} + annonces{" "}
+                  {finalScore.player.announces} + dix de der {finalScore.player.dix_de_der})
+                </div>
+                <div>
+                  Adversaire : {finalScore.opponent.total} (cartes {finalScore.opponent.cards} + annonces{" "}
+                  {finalScore.opponent.announces} + dix de der {finalScore.opponent.dix_de_der})
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-gray-600">Couleur (si applicable)</span>
-              <select
-                value={announceSuit}
-                onChange={(e) => setAnnounceSuit(e.target.value)}
-                className="border rounded px-2 py-1"
-                disabled={!canPlay || announceType === "none" || announceType === "quinte"}
-              >
-                <option value="">—</option>
-                <option value="H">Cœur</option>
-                <option value="D">Carreau</option>
-                <option value="C">Trèfle</option>
-                <option value="S">Pique</option>
-              </select>
-            </label>
+        {/* Announcement panel */}
+        {!isOver && (
+          <div className="mt-4 rounded border p-3 text-sm max-w-3xl">
+            <div className="font-semibold">Annoncer (au moment où tu poses ta carte)</div>
 
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={showAnnounce}
-                onChange={(e) => setShowAnnounce(e.target.checked)}
-                disabled={!canPlay || announceType === "none"}
+            <div className="mt-2 flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-gray-600">Type</span>
+                <select
+                  value={announceType}
+                  onChange={(e) => setAnnounceType(e.target.value as AnnounceType)}
+                  className="border rounded px-2 py-1"
+                  disabled={!canPlay}
+                >
+                  <option value="none">Aucune</option>
+                  <option value="mariage">Mariage</option>
+                  <option value="tierce">Tierce</option>
+                  <option value="quarteron">Quarteron</option>
+                  <option value="quinte">Quinte (5 brisques)</option>
+                  <option value="chouine">Chouine</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-gray-600">Couleur (si applicable)</span>
+                <select
+                  value={announceSuit}
+                  onChange={(e) => setAnnounceSuit(e.target.value)}
+                  className="border rounded px-2 py-1"
+                  disabled={!canPlay || announceType === "none" || announceType === "quinte"}
+                >
+                  <option value="">—</option>
+                  <option value="H">Cœur</option>
+                  <option value="D">Carreau</option>
+                  <option value="C">Trèfle</option>
+                  <option value="S">Pique</option>
+                </select>
+              </label>
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={showAnnounce}
+                  onChange={(e) => setShowAnnounce(e.target.checked)}
+                  disabled={!canPlay || announceType === "none"}
+                />
+                Je montre
+              </label>
+            </div>
+
+            {announcedPlayer.length > 0 && (
+              <div className="mt-3 text-xs text-gray-600">
+                Déjà annoncées : {announcedPlayer.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Hand */}
+        <h2 className="mt-8 font-semibold">
+          Ta main {loading ? <span className="text-sm text-gray-500">(…)</span> : null}
+        </h2>
+
+        {waitingOpponentLead && <p className="mt-2 text-sm text-gray-600">Attente de l’entame adverse…</p>}
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          {hand.map((c: Card, i: number) => (
+            <button
+              key={`${c.suit}-${c.rank}-${i}`}
+              onClick={() => playCard(c)}
+              disabled={!canPlay}
+              className="w-[110px] h-[160px] rounded overflow-hidden hover:-translate-y-1 hover:shadow-lg transition disabled:opacity-40"
+              title={`${RANK_LABELS[c.rank]} de ${SUIT_LABELS[c.suit]}`}
+            >
+              <img
+                src={cardImageSrc(c)}
+                alt={`${RANK_LABELS[c.rank]} de ${SUIT_LABELS[c.suit]}`}
+                className="w-full h-full object-contain"
               />
-              Je montre
-            </label>
-          </div>
-
-          {announcedPlayer.length > 0 && (
-            <div className="mt-3 text-xs text-gray-600">
-              Déjà annoncées : {announcedPlayer.join(", ")}
-            </div>
-          )}
+            </button>
+          ))}
         </div>
-      )}
-
-      {/* Opponent lead card */}
-      {currentLead && currentLead.by === "opponent" && currentLead.card && (
-        <>
-          <h2 className="mt-8 font-semibold">L’adversaire entame</h2>
-
-          <div className="mt-2 w-[110px] h-[160px] rounded overflow-hidden">
-            <img src={cardImageSrc(currentLead.card)} alt="Carte adverse" className="w-full h-full object-contain" />
-          </div>
-
-          <p className="mt-2 text-sm text-gray-600">À toi de répondre (clique une carte).</p>
-        </>
-      )}
-
-      {/* Your hand */}
-      <h2 className="mt-8 font-semibold">
-        Ta main {loading ? <span className="text-sm text-gray-500">(…)</span> : null}
-      </h2>
-
-      {waitingOpponentLead && <p className="mt-2 text-sm text-gray-600">Attente de l’entame adverse…</p>}
-
-      <div className="mt-3 flex flex-wrap gap-3">
-        {hand.map((c: Card, i: number) => (
-          <button
-            key={`${c.suit}-${c.rank}-${i}`}
-            onClick={() => playCard(c)}
-            disabled={!canPlay}
-            className="w-[110px] h-[160px] rounded overflow-hidden hover:-translate-y-1 hover:shadow-lg transition disabled:opacity-40"
-            title={`${RANK_LABELS[c.rank]} de ${SUIT_LABELS[c.suit]}`}
-          >
-            <img src={cardImageSrc(c)} alt={`${RANK_LABELS[c.rank]} de ${SUIT_LABELS[c.suit]}`} className="w-full h-full object-contain" />
-          </button>
-        ))}
       </div>
 
-      {/* Last trick */}
-      {lastTrick && lastTrick.lead?.card && lastTrick.reply?.card && (
-        <>
-          <h2 className="mt-10 font-semibold">Dernier pli</h2>
+      {/* RIGHT (red + green) */}
+      <div className="space-y-6">
+        {/* Current trick (red) */}
+        <div className="rounded border p-4">
+          <div className="font-semibold">Pli en cours</div>
 
-          <div className="mt-3 flex flex-wrap items-start gap-6 text-sm text-gray-700">
-            <div className="flex items-center gap-3">
-              <div className="w-[70px] h-[100px] rounded overflow-hidden">
-                <img src={cardImageSrc(lastTrick.lead.card)} alt="Entame" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <div>
-                  <span className="font-semibold">Entame :</span>{" "}
-                  {RANK_LABELS[lastTrick.lead.card.rank]} de {SUIT_LABELS[lastTrick.lead.card.suit]} (
-                  {lastTrick.lead.by === "player" ? "toi" : "adversaire"})
-                </div>
+          {!isOver && (
+            <div className="mt-2 text-sm text-gray-600">
+              {waitingOpponentLead
+                ? "Attente de l’entame adverse…"
+                : currentLead
+                  ? currentLead.by === "opponent"
+                    ? "L’adversaire a entamé — à toi de répondre."
+                    : "Tu as entamé."
+                  : "Aucun pli en cours."}
+            </div>
+          )}
+
+          <div className="mt-4 flex items-start gap-6">
+            {/* Lead card slot */}
+            <div>
+              <div className="text-xs text-gray-500 mb-2">Entame</div>
+              <div className="w-[110px] h-[160px] rounded overflow-hidden border bg-white">
+                {currentLead?.card ? (
+                  <img src={cardImageSrc(currentLead.card)} alt="Entame" className="w-full h-full object-contain" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                    —
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-[70px] h-[100px] rounded overflow-hidden">
-                <img src={cardImageSrc(lastTrick.reply.card)} alt="Réponse" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <div>
-                  <span className="font-semibold">Réponse :</span>{" "}
-                  {RANK_LABELS[lastTrick.reply.card.rank]} de {SUIT_LABELS[lastTrick.reply.card.suit]} (
-                  {lastTrick.reply.by === "player" ? "toi" : "adversaire"})
+            {/* Reply slot (empty on UI because you click from hand) */}
+            <div>
+              <div className="text-xs text-gray-500 mb-2">Réponse</div>
+              <div className="w-[110px] h-[160px] rounded overflow-hidden border bg-white">
+                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                  (ta carte)
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div className="min-w-[180px]">
-              <div>
+        {/* Last trick (green) */}
+        <div className="rounded border p-4">
+          <div className="font-semibold">Dernier pli</div>
+
+          {lastTrick && lastTrick.lead?.card && lastTrick.reply?.card ? (
+            <div className="mt-4 space-y-4 text-sm text-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="w-[70px] h-[100px] rounded overflow-hidden border bg-white">
+                  <img src={cardImageSrc(lastTrick.lead.card)} alt="Entame" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Entame</div>
+                  <div>
+                    {RANK_LABELS[lastTrick.lead.card.rank]} de {SUIT_LABELS[lastTrick.lead.card.suit]} (
+                    {lastTrick.lead.by === "player" ? "toi" : "adversaire"})
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="w-[70px] h-[100px] rounded overflow-hidden border bg-white">
+                  <img src={cardImageSrc(lastTrick.reply.card)} alt="Réponse" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Réponse</div>
+                  <div>
+                    {RANK_LABELS[lastTrick.reply.card.rank]} de {SUIT_LABELS[lastTrick.reply.card.suit]} (
+                    {lastTrick.reply.by === "player" ? "toi" : "adversaire"})
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t">
                 <span className="font-semibold">Gagnant :</span>{" "}
                 <span className="font-semibold">{lastTrick.winner === "player" ? "toi" : "adversaire"}</span>
               </div>
             </div>
-          </div>
-        </>
-      )}
-    </main>
-  );
+          ) : (
+            <div className="mt-2 text-sm text-gray-600">Aucun pli précédent pour l’instant.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  </main>
+);
+
 }
