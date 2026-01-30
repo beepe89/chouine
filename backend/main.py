@@ -382,23 +382,118 @@ def resolve_trick(game: Game, lead_by: By, lead_card: Dict[str, str], follow_by:
 
     maybe_finish_game(game)
 
-# -------- AI (legal + strong enough) --------
+# -------- AI (stronger) --------
+
+def _card_key(c: Dict[str, str], trump_suit: str, lead_suit: Optional[str]) -> Tuple[int, int]:
+    """
+    Higher is better for winning a trick.
+    We invert strength so that stronger card => higher value.
+    """
+    is_trump = 1 if c["suit"] == trump_suit else 0
+    follows = 1 if (lead_suit is not None and c["suit"] == lead_suit) else 0
+    power = 7 - RANK_STRENGTH[c["rank"]]  # A strongest -> 7, 7 weakest -> 0
+    # trump beats non-trump, following suit matters only when neither trumps
+    # We'll handle win logic elsewhere; this is just a sortable hint.
+    return (is_trump * 10 + follows * 2, power)
+
+def _trick_points(a: Dict[str, str], b: Dict[str, str]) -> int:
+    return CARD_POINTS[a["rank"]] + CARD_POINTS[b["rank"]]
+
+def _clone_cards(cards: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    return [dict(c) for c in cards]
+
+def _minimax_endgame_value(
+    opp_hand: List[Dict[str, str]],
+    player_hand: List[Dict[str, str]],
+    leader_is_opp: bool,
+    trump_suit: str,
+) -> int:
+    """
+    Perfect-information minimax for talon empty.
+    Returns value = (opp_points - player_points) from remaining cards ONLY,
+    including dix de der (+10 for last trick winner).
+    Assumes both play optimally:
+      - opponent maximizes value
+      - player minimizes value
+    """
+    # terminal
+    if not opp_hand and not player_hand:
+        return 0
+
+    # one trick step
+    if leader_is_opp:
+        best = -10**9
+        # opponent chooses lead
+        for lead in opp_hand:
+            opp2 = [c for c in opp_hand if not card_eq(c, lead)]
+            # player responds with legal moves (talon empty rules apply)
+            legal_p = compute_legal_moves(player_hand, lead, trump_suit, talon_is_not_empty=False)
+            # player minimizes
+            worst_for_opp = 10**9
+            for reply in legal_p:
+                player2 = [c for c in player_hand if not card_eq(c, reply)]
+                winner = trick_winner(lead, reply, trump_suit, talon_is_not_empty=False)  # 0 lead wins, 1 follower wins
+                pts = _trick_points(lead, reply)
+
+                if winner == 0:
+                    # opponent wins trick => +pts
+                    next_val = _minimax_endgame_value(opp2, player2, True, trump_suit)  # winner leads next
+                    v = pts + next_val
+                else:
+                    # player wins trick => -pts
+                    next_val = _minimax_endgame_value(opp2, player2, False, trump_suit)
+                    v = -pts + next_val
+
+                # dix de der if that was last trick
+                if not opp2 and not player2:
+                    v += 10 if (winner == 0) else -10
+
+                worst_for_opp = min(worst_for_opp, v)
+
+            best = max(best, worst_for_opp)
+        return best
+    else:
+        # player leads, opponent follows (opponent still "maximizes", player "minimizes")
+        worst = 10**9
+        for lead in player_hand:
+            player2 = [c for c in player_hand if not card_eq(c, lead)]
+            legal_o = compute_legal_moves(opp_hand, lead, trump_suit, talon_is_not_empty=False)
+            best_for_opp = -10**9
+            for reply in legal_o:
+                opp2 = [c for c in opp_hand if not card_eq(c, reply)]
+                winner = trick_winner(lead, reply, trump_suit, talon_is_not_empty=False)
+                pts = _trick_points(lead, reply)
+
+                if winner == 0:
+                    # player wins => -pts
+                    next_val = _minimax_endgame_value(opp2, player2, False, trump_suit)
+                    v = -pts + next_val
+                else:
+                    # opponent wins => +pts
+                    next_val = _minimax_endgame_value(opp2, player2, True, trump_suit)
+                    v = pts + next_val
+
+                if not opp2 and not player2:
+                    v += 10 if (winner == 1) else -10  # opponent gets dix de der only if it wins
+
+                best_for_opp = max(best_for_opp, v)
+
+            worst = min(worst, best_for_opp)
+        return worst
 
 def ai_choose_best_announce(game: Game, hand_snapshot: List[Dict[str, str]]) -> Tuple[AnnounceType, Optional[str], bool]:
     """
-    Opponent announces optimally, but only if not repeated.
+    (unchanged) Opponent announces optimally, but only if not repeated.
     Returns (type, suit, show)
     """
     possibles: List[Tuple[AnnounceType, Optional[str], int]] = []
 
-    # chouine first
     for s in SUITS:
         if has_chouine(hand_snapshot, s):
             key = announce_key("chouine", s)
             if key not in game.announced_opponent:
                 return "chouine", s, True
 
-    # other announces
     for s in SUITS:
         if has_mariage(hand_snapshot, s):
             possibles.append(("mariage", s, announce_points("mariage", s, game.trump_suit)))
@@ -410,7 +505,6 @@ def ai_choose_best_announce(game: Game, hand_snapshot: List[Dict[str, str]]) -> 
     if count_brisques(hand_snapshot) >= 5:
         possibles.append(("quinte", None, 50))
 
-    # pick max pts not already announced
     possibles.sort(key=lambda x: x[2], reverse=True)
     for t, s, _pts in possibles:
         key = announce_key(t, s)
@@ -420,34 +514,55 @@ def ai_choose_best_announce(game: Game, hand_snapshot: List[Dict[str, str]]) -> 
     return "none", None, False
 
 def ai_choose_lead_card(game: Game) -> Dict[str, str]:
-    # legal: any card if no current lead
-    # heuristic: keep brisques, keep trumps if talon empty, etc.
     hand = game.opponent_hand
     if not hand:
         raise ValueError("opponent has no cards")
 
+    # ✅ talon empty => compute real best with minimax
     if not talon_not_empty(game):
-        # endgame: play strongest non-risky first (simple but effective)
-        # prefer winning cards / trumps
-        def score(c):
-            s = 0
-            if c["suit"] == game.trump_suit:
-                s += 2
-            if is_brisque(c):
-                s += 3
-            s += (7 - RANK_STRENGTH[c["rank"]]) * 0.1
-            return s
-        return max(hand, key=score)
+        best_card = None
+        best_val = -10**9
+        for c in hand:
+            opp2 = [x for x in hand if not card_eq(x, c)]
+            player2 = _clone_cards(game.player_hand)
+            # after opponent leads, player responds (minimizes)
+            val = -10**9
+            legal_p = compute_legal_moves(player2, c, game.trump_suit, talon_is_not_empty=False)
+            # player chooses worst for opponent
+            worst = 10**9
+            for reply in legal_p:
+                p3 = [x for x in player2 if not card_eq(x, reply)]
+                winner = trick_winner(c, reply, game.trump_suit, talon_is_not_empty=False)
+                pts = _trick_points(c, reply)
+                if winner == 0:
+                    v = pts + _minimax_endgame_value(opp2, p3, True, game.trump_suit)
+                else:
+                    v = -pts + _minimax_endgame_value(opp2, p3, False, game.trump_suit)
+                if not opp2 and not p3:
+                    v += 10 if (winner == 0) else -10
+                worst = min(worst, v)
+            val = worst
 
-    # with talon: try to win to draw first, but avoid burning trumps
-    def score(c):
+            if val > best_val:
+                best_val = val
+                best_card = c
+        return best_card or max(hand, key=lambda c: _card_key(c, game.trump_suit, None))
+
+    # ✅ talon not empty => better heuristic (tempo + avoid bleeding brisques/trumps)
+    def score(c: Dict[str, str]) -> float:
         s = 0.0
-        if is_brisque(c):
-            s += 2.0
+        # keep brisques unless we try to win tempo
+        s -= 2.2 if is_brisque(c) else 0.0
+        # don't waste high trumps early
         if c["suit"] == game.trump_suit:
-            s += 0.5
-        s += (7 - RANK_STRENGTH[c["rank"]]) * 0.05
-        s += random.random() * 0.01
+            s -= 0.8
+            s -= (7 - RANK_STRENGTH[c["rank"]]) * 0.12
+        # lead small in long suits to create future control
+        s += 0.15 * sum(1 for x in hand if x["suit"] == c["suit"])
+        # prefer low-ish cards (but not always)
+        s += (RANK_STRENGTH[c["rank"]]) * 0.08
+        # tiny randomness to avoid being robotic
+        s += random.random() * 0.02
         return s
 
     return max(hand, key=score)
@@ -457,20 +572,60 @@ def ai_choose_follow_card(game: Game, lead_card: Dict[str, str]) -> Dict[str, st
     if not hand:
         raise ValueError("opponent has no cards")
 
-    legal = compute_legal_moves(hand, lead_card, game.trump_suit, talon_not_empty(game))
+    talon_is_not_empty = talon_not_empty(game)
+    legal = compute_legal_moves(hand, lead_card, game.trump_suit, talon_is_not_empty)
 
-    # try to win cheaply if possible
+    # ✅ talon empty => compute best reply with minimax
+    if not talon_is_not_empty:
+        best = None
+        best_val = -10**9
+        for reply in legal:
+            opp2 = [x for x in hand if not card_eq(x, reply)]
+            player2 = _clone_cards(game.player_hand)
+            # remove the lead card from player hand (it's already on table; in your engine the lead card was removed)
+            # But in state, when player leads, it has already been removed in leader_play().
+            # So game.player_hand already excludes lead_card. Good.
+            winner = trick_winner(lead_card, reply, game.trump_suit, talon_is_not_empty=False)
+            pts = _trick_points(lead_card, reply)
+
+            if winner == 1:
+                v = pts + _minimax_endgame_value(opp2, player2, True, game.trump_suit)  # opponent leads next
+            else:
+                v = -pts + _minimax_endgame_value(opp2, player2, False, game.trump_suit)
+
+            if not opp2 and not player2:
+                v += 10 if (winner == 1) else -10
+
+            if v > best_val:
+                best_val = v
+                best = reply
+        return best or min(legal, key=lambda c: (CARD_POINTS[c["rank"]], RANK_STRENGTH[c["rank"]]))
+
+    # ✅ talon not empty => "win cheaply" else dump smart
     def follower_wins(c) -> bool:
-        return trick_winner(lead_card, c, game.trump_suit, talon_not_empty(game)) == 1
+        return trick_winner(lead_card, c, game.trump_suit, talon_is_not_empty=True) == 1
 
     winning = [c for c in legal if follower_wins(c)]
     if winning:
-        return min(winning, key=lambda c: (CARD_POINTS[c["rank"]], RANK_STRENGTH[c["rank"]]))
+        # win with minimal cost: prefer low trump / low points
+        return min(winning, key=lambda c: (1 if c["suit"] == game.trump_suit else 0, CARD_POINTS[c["rank"]], RANK_STRENGTH[c["rank"]]))
 
-    # otherwise dump low value
-    def dump_key(c):
-        return (1 if is_brisque(c) else 0, 1 if c["suit"] == game.trump_suit else 0, CARD_POINTS[c["rank"]], RANK_STRENGTH[c["rank"]])
-    return min(legal, key=dump_key)
+    # if losing, avoid bleeding brisques/trumps; dump low in short suits
+    def dump_score(c: Dict[str, str]) -> float:
+        s = 0.0
+        if is_brisque(c):
+            s += 4.0
+        if c["suit"] == game.trump_suit:
+            s += 2.5
+        # dumping from a singleton can be good (get rid of future awkward follow)
+        suit_len = sum(1 for x in hand if x["suit"] == c["suit"])
+        if suit_len == 1:
+            s -= 0.6
+        # lower ranks are cheaper to dump
+        s += (7 - (7 - RANK_STRENGTH[c["rank"]])) * 0.08  # basically +RANK_STRENGTH * 0.08
+        return s
+
+    return min(legal, key=dump_score)
 
 # -------- Engine actions (lead/follow) --------
 
