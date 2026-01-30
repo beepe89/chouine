@@ -143,7 +143,7 @@ export default function Home() {
   return (
     <main className="p-6">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold">Chouine MVP</h1>
+        <h1 className="text-2xl font-semibold">La chouine</h1>
 
         <button
           className="ml-auto px-4 py-2 rounded border hover:bg-gray-50 disabled:opacity-50"
